@@ -1,0 +1,3 @@
+node_modules/
+*.local
+assets/keys/service-account.json

@@ -1,0 +1,41 @@
+{
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "expense-tracker-b9ad5",
+          "appId": "1:525581741124:android:f0874f6b6adb727840a011",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "expense-tracker-b9ad5",
+          "configurations": {
+            "android": "1:525581741124:android:f0874f6b6adb727840a011",
+            "ios": "1:525581741124:ios:8e44b7214c5e643940a011",
+            "macos": "1:525581741124:ios:8e44b7214c5e643940a011",
+            "web": "1:525581741124:web:92e6572c9b04edf040a011",
+            "windows": "1:525581741124:web:c2c25d51f1c3c19d40a011"
+          }
+        }
+      }
+    }
+  },
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "disallowLegacyRuntimeConfig": true,
+      "ignore": [
+        "node_modules",
+        
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log",
+        "*.local"
+      ],
+      "predeploy": []
+    }
+  ]
+}
