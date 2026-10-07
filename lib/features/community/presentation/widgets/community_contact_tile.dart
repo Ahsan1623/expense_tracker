@@ -31,36 +31,36 @@ class CommunityContactTile extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // 1. Group-level ledger stream
+    // 1. Mutual Groups Optimal Debt Stream
     final groupLedgerAsync = ref.watch(
       peerLedgerProvider((myUid: currentUserId, peerUid: friend.uid)),
     );
 
-    // 2. Direct 1-to-1 expense stream
+    // 2. Direct 1-to-1 Expenses Stream
     final directExpensesAsync = ref.watch(
       directExpensesStreamProvider((myUid: currentUserId, peerUid: friend.uid)),
     );
 
-    double groupNet = groupLedgerAsync.value?.totalNetAmount ?? 0.0;
+    final double groupNet = groupLedgerAsync.value?.totalNetAmount ?? 0.0;
     double directNet = 0.0;
 
     final directExpenses = directExpensesAsync.value ?? [];
     for (final exp in directExpenses) {
-      if (exp.isSettlement) {
-        if (exp.payerId == currentUserId) {
-          directNet += exp.owedAmount;
-        } else {
-          directNet -= exp.owedAmount;
-        }
+      // Archived / settled entries ko bilkul count nahi karna
+      if (exp.isArchived) continue;
+
+      // Pending settlements ko ignore karein jab tak confirm na ho
+      if (exp.isSettlement) continue;
+
+      // Sirf active, unsettled 1-to-1 expenses calculate honge
+      if (exp.payerId == currentUserId) {
+        directNet += exp.owedAmount;
       } else {
-        if (exp.payerId == currentUserId) {
-          directNet += exp.owedAmount;
-        } else {
-          directNet -= exp.owedAmount;
-        }
+        directNet -= exp.owedAmount;
       }
     }
 
+    // Exact Match with PeerLedgerScreen
     final totalNet = groupNet + directNet;
     final avatar = _getAvatar(friend.photoUrl);
 

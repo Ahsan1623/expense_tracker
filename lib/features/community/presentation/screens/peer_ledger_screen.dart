@@ -7,6 +7,7 @@ import '../../../auth/presentation/controllers/auth_controller.dart';
 import '../../../groups/presentation/screens/group_detail_screen.dart';
 import '../../domain/services/peer_ledger_service.dart';
 import '../../data/repositories/direct_expense_repository.dart';
+import '../../data/models/direct_expense_model.dart';
 import '../widgets/add_direct_expense_sheet.dart';
 import 'peer_chat_screen.dart';
 import '../../../../core/widgets/image_preview_dialog.dart';
@@ -25,72 +26,175 @@ class PeerLedgerScreen extends ConsumerWidget {
     return NetworkImage(photoUrl);
   }
 
-  void _showSettleAllDialog(
+  void _showSettlePaymentDialog(
     BuildContext context,
     WidgetRef ref,
     String myUid,
     String myName,
-    double totalConsolidated,
+    double settleAmount,
   ) {
-    final isPaying = totalConsolidated < 0;
-    final settleAmount = totalConsolidated.abs();
+    String selectedMethod = 'Cash';
 
-    showDialog(
+    showModalBottomSheet(
       context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text(
-          isPaying ? 'Settle All Dues' : 'Receive Settlement',
-          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) => Padding(
+          padding: EdgeInsets.only(
+            top: 24,
+            left: 20,
+            right: 20,
+            bottom: MediaQuery.of(context).viewInsets.bottom + 24,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              const Text(
+                'Settle Dues',
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'A settlement request will be sent to ${peerUser.displayName}. Dues will only clear once accepted.',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey.shade600,
+                  height: 1.3,
+                ),
+              ),
+              const SizedBox(height: 14),
+              Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Amount You Owe:',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    Text(
+                      'Rs. ${settleAmount.toStringAsFixed(0)}',
+                      style: TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 18,
+                        color: Colors.red.shade700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 14),
+              const Text(
+                'Payment Method:',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 8,
+                children: ['Cash', 'Easypaisa', 'JazzCash', 'Bank Transfer']
+                    .map((mode) {
+                      final isSel = selectedMethod == mode;
+                      return ChoiceChip(
+                        label: Text(mode),
+                        selected: isSel,
+                        selectedColor: Colors.teal.shade100,
+                        onSelected: (val) {
+                          if (val) setModalState(() => selectedMethod = mode);
+                        },
+                      );
+                    })
+                    .toList(),
+              ),
+              const SizedBox(height: 20),
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.teal.shade700,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                onPressed: () async {
+                  Navigator.pop(ctx);
+                  try {
+                    await ref
+                        .read(directExpenseRepositoryProvider)
+                        .directSettleUp(
+                          payerId: myUid,
+                          receiverId: peerUser.uid,
+                          amount: settleAmount,
+                          payerName: myName,
+                          receiverName: peerUser.displayName,
+                          paymentMode: selectedMethod,
+                        );
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            'Settlement request sent to ${peerUser.displayName}.',
+                          ),
+                          backgroundColor: Colors.teal.shade800,
+                        ),
+                      );
+                    }
+                  } catch (e) {
+                    if (context.mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            e.toString().replaceAll('Exception: ', ''),
+                          ),
+                          backgroundColor: Colors.redAccent,
+                        ),
+                      );
+                    }
+                  }
+                },
+                child: const Text(
+                  'Send Settlement Request',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
         ),
+      ),
+    );
+  }
+
+  void _sendPaymentReminder(BuildContext context, double amount) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => PeerChatScreen(peerUser: peerUser),
+      ),
+    );
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
         content: Text(
-          isPaying
-              ? 'Kya aap ${peerUser.displayName} ko Rs. ${settleAmount.toStringAsFixed(0)} ada karke tamam direct aur shared hisaab settle karna chahte hain?'
-              : 'Kya ${peerUser.displayName} ne aapko total Rs. ${settleAmount.toStringAsFixed(0)} direct ada kar diye hain?',
-          style: const TextStyle(fontSize: 13, height: 1.4),
+          'Chat opened. You can remind ${peerUser.displayName} to settle Rs. ${amount.toStringAsFixed(0)}.',
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.teal.shade700,
-              foregroundColor: Colors.white,
-            ),
-            onPressed: () async {
-              Navigator.pop(ctx);
-              try {
-                await ref.read(directExpenseRepositoryProvider).directSettleUp(
-                      payerId: isPaying ? myUid : peerUser.uid,
-                      receiverId: isPaying ? peerUser.uid : myUid,
-                      amount: settleAmount,
-                      payerName: isPaying ? myName : peerUser.displayName,
-                      receiverName: isPaying ? peerUser.displayName : myName,
-                    );
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Total dues of Rs. ${settleAmount.toStringAsFixed(0)} settled!'),
-                      backgroundColor: Colors.teal.shade800,
-                    ),
-                  );
-                }
-              } catch (e) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(e.toString().replaceAll('Exception: ', '')),
-                      backgroundColor: Colors.redAccent,
-                    ),
-                  );
-                }
-              }
-            },
-            child: const Text('Confirm Settle All'),
-          ),
-        ],
+        backgroundColor: Colors.teal.shade800,
       ),
     );
   }
@@ -121,8 +225,11 @@ class PeerLedgerScreen extends ConsumerWidget {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.chat_bubble_outline_rounded, color: Colors.teal),
-            tooltip: 'Open Chat',
+            icon: const Icon(
+              Icons.chat_bubble_outline_rounded,
+              color: Colors.teal,
+            ),
+            tooltip: 'Chat',
             onPressed: () {
               Navigator.push(
                 context,
@@ -131,6 +238,60 @@ class PeerLedgerScreen extends ConsumerWidget {
                 ),
               );
             },
+          ),
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert_rounded, color: Color(0xFF475569)),
+            onSelected: (val) async {
+              if (val == 'clear_settled') {
+                try {
+                  await ref
+                      .read(directExpenseRepositoryProvider)
+                      .clearSettledEntries(myUid, peerUser.uid);
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Cleared confirmed settlements from view.',
+                        ),
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          e.toString().replaceAll('Exception: ', ''),
+                        ),
+                        backgroundColor: Colors.redAccent,
+                      ),
+                    );
+                  }
+                }
+              }
+            },
+            itemBuilder: (ctx) => [
+              const PopupMenuItem(
+                value: 'clear_settled',
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.cleaning_services_outlined,
+                      size: 18,
+                      color: Colors.teal,
+                    ),
+                    SizedBox(width: 8),
+                    Text(
+                      'Clear Settled Entries',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -184,31 +345,36 @@ class PeerLedgerScreen extends ConsumerWidget {
         data: (groupSummary) {
           return directExpensesAsync.when(
             data: (directExpenses) {
-              // Exact Reconciled Direct Net Calculation
               double directNet = 0.0;
+              final List<DirectExpenseModel> visibleExpenses = [];
+
               for (final exp in directExpenses) {
                 if (exp.isSettlement) {
-                  if (exp.payerId == myUid) {
-                    directNet += exp.owedAmount; // maine settle pay kiya
-                  } else {
-                    directNet -= exp.owedAmount; // peer ne mujhe settle pay kiya
-                  }
+                  // Agar settlement confirmed ho kar archive ho chuki hai to view se hide ho
+                  if (exp.isArchived) continue;
+
+                  visibleExpenses.add(exp);
                 } else {
+                  // Normal expense hamesha screen aur balance dono mein rahega!
                   if (exp.payerId == myUid) {
-                    directNet += exp.owedAmount; // peer owes me
+                    directNet += exp.owedAmount;
                   } else {
-                    directNet -= exp.owedAmount; // I owe peer
+                    directNet -= exp.owedAmount;
                   }
+                  visibleExpenses.add(exp);
                 }
               }
 
               final totalConsolidated = groupSummary.totalNetAmount + directNet;
               final avatar = _getAvatar(peerUser.photoUrl);
+              final activeMutualGroups = groupSummary.breakdowns
+                  .where((b) => b.netAmount.abs() > 0.01)
+                  .toList();
 
               return ListView(
                 padding: const EdgeInsets.all(16),
                 children: [
-                  // Hero Consolidated Card
+                  // Hero Card
                   Container(
                     padding: const EdgeInsets.all(20),
                     decoration: BoxDecoration(
@@ -222,8 +388,11 @@ class PeerLedgerScreen extends ConsumerWidget {
                       borderRadius: BorderRadius.circular(22),
                       boxShadow: [
                         BoxShadow(
-                          color: (totalConsolidated >= 0 ? Colors.teal : Colors.red)
-                              .withValues(alpha: 0.25),
+                          color:
+                              (totalConsolidated >= 0
+                                      ? Colors.teal
+                                      : Colors.red)
+                                  .withValues(alpha: 0.25),
                           blurRadius: 16,
                           offset: const Offset(0, 8),
                         ),
@@ -244,7 +413,9 @@ class PeerLedgerScreen extends ConsumerWidget {
                           },
                           child: CircleAvatar(
                             radius: 32,
-                            backgroundColor: Colors.white.withValues(alpha: 0.2),
+                            backgroundColor: Colors.white.withValues(
+                              alpha: 0.2,
+                            ),
                             backgroundImage: avatar,
                             child: avatar == null
                                 ? Text(
@@ -280,7 +451,7 @@ class PeerLedgerScreen extends ConsumerWidget {
                         Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 16,
-                            vertical: 10,
+                            vertical: 12,
                           ),
                           decoration: BoxDecoration(
                             color: Colors.black.withValues(alpha: 0.15),
@@ -289,11 +460,11 @@ class PeerLedgerScreen extends ConsumerWidget {
                           child: Column(
                             children: [
                               Text(
-                                totalConsolidated > 0
-                                    ? 'Overall, ${peerUser.displayName} owes you'
-                                    : totalConsolidated < 0
-                                        ? 'Overall, you owe ${peerUser.displayName}'
-                                        : 'You and ${peerUser.displayName} are all settled up!',
+                                totalConsolidated > 0.01
+                                    ? '${peerUser.displayName} owes you'
+                                    : totalConsolidated < -0.01
+                                    ? 'You owe ${peerUser.displayName}'
+                                    : 'You and ${peerUser.displayName} are all settled up!',
                                 style: const TextStyle(
                                   color: Colors.white70,
                                   fontSize: 12,
@@ -309,23 +480,24 @@ class PeerLedgerScreen extends ConsumerWidget {
                                   fontWeight: FontWeight.w900,
                                 ),
                               ),
-                              if (totalConsolidated.abs() > 0.01) ...[
-                                const SizedBox(height: 10),
+                              const SizedBox(height: 10),
+                              if (totalConsolidated < -0.01)
                                 ElevatedButton.icon(
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: Colors.white,
-                                    foregroundColor: totalConsolidated > 0
-                                        ? Colors.teal.shade800
-                                        : Colors.red.shade800,
+                                    foregroundColor: Colors.red.shade800,
                                     padding: const EdgeInsets.symmetric(
-                                      horizontal: 16,
-                                      vertical: 6,
+                                      horizontal: 18,
+                                      vertical: 8,
                                     ),
                                     shape: RoundedRectangleBorder(
                                       borderRadius: BorderRadius.circular(10),
                                     ),
                                   ),
-                                  icon: const Icon(Icons.handshake_rounded, size: 16),
+                                  icon: const Icon(
+                                    Icons.payment_rounded,
+                                    size: 16,
+                                  ),
                                   label: const Text(
                                     'Settle All Dues',
                                     style: TextStyle(
@@ -333,15 +505,43 @@ class PeerLedgerScreen extends ConsumerWidget {
                                       fontSize: 12,
                                     ),
                                   ),
-                                  onPressed: () => _showSettleAllDialog(
+                                  onPressed: () => _showSettlePaymentDialog(
                                     context,
                                     ref,
                                     myUid,
                                     myName,
-                                    totalConsolidated,
+                                    totalConsolidated.abs(),
+                                  ),
+                                )
+                              else if (totalConsolidated > 0.01)
+                                ElevatedButton.icon(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: Colors.white,
+                                    foregroundColor: Colors.teal.shade800,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 18,
+                                      vertical: 8,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                  ),
+                                  icon: const Icon(
+                                    Icons.notifications_active_rounded,
+                                    size: 16,
+                                  ),
+                                  label: const Text(
+                                    'Request Payment / Remind',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                  onPressed: () => _sendPaymentReminder(
+                                    context,
+                                    totalConsolidated.abs(),
                                   ),
                                 ),
-                              ],
                             ],
                           ),
                         ),
@@ -350,7 +550,6 @@ class PeerLedgerScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 24),
 
-                  // Section 1: Direct 1-to-1 Ledger
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -363,26 +562,26 @@ class PeerLedgerScreen extends ConsumerWidget {
                         ),
                       ),
                       Text(
-                        directNet > 0
+                        directNet > 0.01
                             ? '+Rs. ${directNet.abs().toStringAsFixed(0)}'
-                            : directNet < 0
-                                ? '-Rs. ${directNet.abs().toStringAsFixed(0)}'
-                                : 'Settled',
+                            : directNet < -0.01
+                            ? '-Rs. ${directNet.abs().toStringAsFixed(0)}'
+                            : 'Settled',
                         style: TextStyle(
                           fontWeight: FontWeight.w800,
                           fontSize: 14,
-                          color: directNet > 0
+                          color: directNet > 0.01
                               ? const Color(0xFF059669)
-                              : (directNet < 0
-                                  ? const Color(0xFFE11D48)
-                                  : Colors.grey),
+                              : (directNet < -0.01
+                                    ? const Color(0xFFE11D48)
+                                    : Colors.grey),
                         ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 10),
 
-                  if (directExpenses.isEmpty)
+                  if (visibleExpenses.isEmpty)
                     Container(
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
@@ -391,8 +590,7 @@ class PeerLedgerScreen extends ConsumerWidget {
                       ),
                       child: Center(
                         child: Text(
-                          'No direct 1-to-1 expenses yet.\nTap "Add 1-to-1 Expense" to record non-group debts.',
-                          textAlign: TextAlign.center,
+                          'No direct 1-to-1 expenses recorded.',
                           style: TextStyle(
                             color: Colors.grey.shade500,
                             fontSize: 12,
@@ -401,15 +599,27 @@ class PeerLedgerScreen extends ConsumerWidget {
                       ),
                     )
                   else
-                    ...directExpenses.map((exp) {
+                    ...visibleExpenses.map((exp) {
                       final iAmPayer = exp.payerId == myUid;
                       final isSettlement = exp.isSettlement;
+                      final isPending =
+                          isSettlement && exp.settlementStatus == 'PENDING';
+                      final iAmReceiver = exp.borrowerId == myUid;
 
                       return Container(
-                        margin: const EdgeInsets.only(bottom: 8),
+                        margin: const EdgeInsets.only(bottom: 12),
+                        padding: const EdgeInsets.all(14),
                         decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(14),
+                          color: isPending
+                              ? const Color(0xFFFFFBEB)
+                              : Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: isPending
+                              ? Border.all(
+                                  color: Colors.amber.shade300,
+                                  width: 1.2,
+                                )
+                              : null,
                           boxShadow: [
                             BoxShadow(
                               color: Colors.black.withValues(alpha: 0.02),
@@ -418,132 +628,327 @@ class PeerLedgerScreen extends ConsumerWidget {
                             ),
                           ],
                         ),
-                        child: ListTile(
-                          dense: true,
-                          leading: CircleAvatar(
-                            backgroundColor: isSettlement
-                                ? Colors.amber.shade50
-                                : Colors.teal.shade50,
-                            child: Icon(
-                              isSettlement
-                                  ? Icons.handshake_rounded
-                                  : Icons.receipt_rounded,
-                              size: 16,
-                              color: isSettlement
-                                  ? Colors.amber.shade800
-                                  : Colors.teal.shade800,
-                            ),
-                          ),
-                          title: Text(
-                            exp.title,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 13,
-                            ),
-                          ),
-                          subtitle: Text(
-                            'Paid by ${iAmPayer ? 'You' : peerUser.displayName} • ${DateFormat('dd MMM').format(exp.createdAt)}',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: Colors.grey.shade500,
-                            ),
-                          ),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                'Rs. ${exp.owedAmount.toStringAsFixed(0)}',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 13,
-                                  color: iAmPayer
-                                      ? const Color(0xFF059669)
-                                      : const Color(0xFFE11D48),
-                                ),
-                              ),
-                              const SizedBox(width: 6),
-                              // Sirf payer aur NON-SETTLEMENT par delete icon show hoga
-                              if (iAmPayer && !isSettlement)
-                                IconButton(
-                                  icon: Icon(
-                                    Icons.delete_outline_rounded,
-                                    color: Colors.grey.shade400,
-                                    size: 16,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                CircleAvatar(
+                                  radius: 18,
+                                  backgroundColor: isSettlement
+                                      ? (isPending
+                                            ? Colors.amber.shade100
+                                            : Colors.teal.shade50)
+                                      : Colors.teal.shade50,
+                                  child: Icon(
+                                    isSettlement
+                                        ? Icons.handshake_rounded
+                                        : Icons.receipt_rounded,
+                                    size: 18,
+                                    color: isSettlement
+                                        ? (isPending
+                                              ? Colors.amber.shade900
+                                              : Colors.teal.shade800)
+                                        : Colors.teal.shade800,
                                   ),
-                                  onPressed: () async {
-                                    try {
-                                      await ref
-                                          .read(directExpenseRepositoryProvider)
-                                          .deleteDirectExpense(
-                                            uid1: myUid,
-                                            uid2: peerUser.uid,
-                                            currentUserId: myUid,
-                                            expense: exp,
-                                          );
-                                    } catch (e) {
-                                      if (context.mounted) {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          SnackBar(
-                                            content: Text(e.toString().replaceAll('Exception: ', '')),
-                                            backgroundColor: Colors.redAccent,
-                                          ),
-                                        );
-                                      }
-                                    }
-                                  },
                                 ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        exp.title,
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 14,
+                                        ),
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        'Paid by ${iAmPayer ? 'You' : peerUser.displayName} • ${DateFormat('dd MMM, hh:mm a').format(exp.createdAt)}',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          color: Colors.grey.shade600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      'Rs. ${exp.owedAmount.toStringAsFixed(0)}',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w900,
+                                        fontSize: 14,
+                                        color: iAmPayer
+                                            ? const Color(0xFF059669)
+                                            : const Color(0xFFE11D48),
+                                      ),
+                                    ),
+                                    // Sirf aur sirf payer ke unsettled expense par delete ka icon aayega
+                                    if (!isSettlement && iAmPayer) ...[
+                                      const SizedBox(width: 8),
+                                      IconButton(
+                                        icon: Icon(
+                                          Icons.delete_outline_rounded,
+                                          color: Colors.grey.shade400,
+                                          size: 20,
+                                        ),
+                                        padding: EdgeInsets.zero,
+                                        constraints: const BoxConstraints(),
+                                        tooltip: 'Delete',
+                                        onPressed: () async {
+                                          try {
+                                            await ref
+                                                .read(
+                                                  directExpenseRepositoryProvider,
+                                                )
+                                                .deleteDirectExpense(
+                                                  uid1: myUid,
+                                                  uid2: peerUser.uid,
+                                                  currentUserId: myUid,
+                                                  expense: exp,
+                                                );
+                                            if (context.mounted) {
+                                              ScaffoldMessenger.of(
+                                                context,
+                                              ).showSnackBar(
+                                                const SnackBar(
+                                                  content: Text(
+                                                    'Expense deleted successfully.',
+                                                  ),
+                                                ),
+                                              );
+                                            }
+                                          } catch (e) {
+                                            if (context.mounted) {
+                                              ScaffoldMessenger.of(
+                                                context,
+                                              ).showSnackBar(
+                                                SnackBar(
+                                                  content: Text(
+                                                    e.toString().replaceAll(
+                                                      'Exception: ',
+                                                      '',
+                                                    ),
+                                                  ),
+                                                  backgroundColor:
+                                                      Colors.redAccent,
+                                                ),
+                                              );
+                                            }
+                                          }
+                                        },
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ],
+                            ),
+
+                            // Settlement Action Footer
+                            if (isPending) ...[
+                              const SizedBox(height: 12),
+                              const Divider(height: 1),
+                              const SizedBox(height: 10),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                alignment: WrapAlignment.spaceBetween,
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Colors.amber.shade200,
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Text(
+                                      iAmReceiver
+                                          ? 'Action Required'
+                                          : 'Pending Approval',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.bold,
+                                        color: Colors.amber.shade900,
+                                      ),
+                                    ),
+                                  ),
+                                  if (iAmReceiver)
+                                    Wrap(
+                                      spacing: 6,
+                                      children: [
+                                        ElevatedButton.icon(
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor:
+                                                Colors.teal.shade700,
+                                            foregroundColor: Colors.white,
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 12,
+                                              vertical: 6,
+                                            ),
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                            ),
+                                            elevation: 0,
+                                          ),
+                                          icon: const Icon(
+                                            Icons.check,
+                                            size: 14,
+                                          ),
+                                          label: const Text(
+                                            'Confirm',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                          onPressed: () async {
+                                            try {
+                                              await ref
+                                                  .read(
+                                                    directExpenseRepositoryProvider,
+                                                  )
+                                                  .respondToSettlement(
+                                                    uid1: myUid,
+                                                    uid2: peerUser.uid,
+                                                    expenseId: exp.expenseId,
+                                                    accept: true,
+                                                    currentUserId: myUid,
+                                                    currentUserName: myName,
+                                                  );
+                                            } catch (e) {
+                                              if (context.mounted) {
+                                                ScaffoldMessenger.of(
+                                                  context,
+                                                ).showSnackBar(
+                                                  SnackBar(
+                                                    content: Text(
+                                                      e.toString().replaceAll(
+                                                        'Exception: ',
+                                                        '',
+                                                      ),
+                                                    ),
+                                                    backgroundColor:
+                                                        Colors.redAccent,
+                                                  ),
+                                                );
+                                              }
+                                            }
+                                          },
+                                        ),
+                                        OutlinedButton.icon(
+                                          style: OutlinedButton.styleFrom(
+                                            foregroundColor:
+                                                Colors.red.shade700,
+                                            side: BorderSide(
+                                              color: Colors.red.shade200,
+                                            ),
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 10,
+                                              vertical: 6,
+                                            ),
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius:
+                                                  BorderRadius.circular(8),
+                                            ),
+                                          ),
+                                          icon: const Icon(
+                                            Icons.close,
+                                            size: 14,
+                                          ),
+                                          label: const Text(
+                                            'Decline',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.bold,
+                                            ),
+                                          ),
+                                          onPressed: () async {
+                                            try {
+                                              await ref
+                                                  .read(
+                                                    directExpenseRepositoryProvider,
+                                                  )
+                                                  .respondToSettlement(
+                                                    uid1: myUid,
+                                                    uid2: peerUser.uid,
+                                                    expenseId: exp.expenseId,
+                                                    accept: false,
+                                                    currentUserId: myUid,
+                                                    currentUserName: myName,
+                                                  );
+                                            } catch (e) {
+                                              if (context.mounted) {
+                                                ScaffoldMessenger.of(
+                                                  context,
+                                                ).showSnackBar(
+                                                  SnackBar(
+                                                    content: Text(
+                                                      e.toString().replaceAll(
+                                                        'Exception: ',
+                                                        '',
+                                                      ),
+                                                    ),
+                                                    backgroundColor:
+                                                        Colors.redAccent,
+                                                  ),
+                                                );
+                                              }
+                                            }
+                                          },
+                                        ),
+                                      ],
+                                    ),
+                                ],
+                              ),
                             ],
-                          ),
+                          ],
                         ),
                       );
                     }),
 
                   const SizedBox(height: 24),
 
-                  // Section 2: Shared Groups Breakdown (Direct Group Redirection)
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Shared Groups Breakdown',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w800,
-                          fontSize: 15,
-                          color: Color(0xFF1E293B),
-                        ),
-                      ),
-                      Text(
-                        'Tap group to open',
-                        style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-
-                  if (groupSummary.breakdowns.isEmpty)
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      child: Center(
-                        child: Text(
-                          'No mutual groups found with ${peerUser.displayName}.',
+                  if (activeMutualGroups.isNotEmpty) ...[
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Shared Groups Breakdown (Optimal Debt)',
                           style: TextStyle(
-                            color: Colors.grey.shade500,
-                            fontSize: 12,
+                            fontWeight: FontWeight.w800,
+                            fontSize: 15,
+                            color: Color(0xFF1E293B),
                           ),
                         ),
-                      ),
-                    )
-                  else
-                    ...groupSummary.breakdowns.map((b) {
+                        Text(
+                          'Tap to open',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.grey.shade500,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    ...activeMutualGroups.map((b) {
                       final groupNet = b.netAmount;
 
                       return InkWell(
                         onTap: () {
-                          // Seedha group screen par navigate karein
                           Navigator.push(
                             context,
                             MaterialPageRoute(
@@ -564,8 +969,6 @@ class PeerLedgerScreen extends ConsumerWidget {
                             boxShadow: [
                               BoxShadow(
                                 color: Colors.black.withValues(alpha: 0.02),
-                                blurRadius: 10,
-                                offset: const Offset(0, 4),
                               ),
                             ],
                           ),
@@ -573,7 +976,8 @@ class PeerLedgerScreen extends ConsumerWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
                                 children: [
                                   Row(
                                     children: [
@@ -607,8 +1011,8 @@ class PeerLedgerScreen extends ConsumerWidget {
                                           color: groupNet > 0
                                               ? const Color(0xFF059669)
                                               : (groupNet < 0
-                                                  ? const Color(0xFFE11D48)
-                                                  : Colors.grey),
+                                                    ? const Color(0xFFE11D48)
+                                                    : Colors.grey),
                                         ),
                                       ),
                                       const SizedBox(width: 6),
@@ -625,44 +1029,31 @@ class PeerLedgerScreen extends ConsumerWidget {
                               Text(
                                 groupNet > 0
                                     ? '${peerUser.displayName} owes you in this group'
-                                    : groupNet < 0
-                                        ? 'You owe ${peerUser.displayName} in this group'
-                                        : 'Settled in this group',
+                                    : 'You owe ${peerUser.displayName} in this group',
                                 style: TextStyle(
                                   fontSize: 12,
                                   fontWeight: FontWeight.w600,
                                   color: groupNet > 0
                                       ? const Color(0xFF059669)
-                                      : (groupNet < 0
-                                          ? const Color(0xFFE11D48)
-                                          : Colors.grey),
+                                      : const Color(0xFFE11D48),
                                 ),
                               ),
-                              if (b.sharedExpenses.isNotEmpty) ...[
-                                const Divider(height: 18),
-                                Text(
-                                  '${b.sharedExpenses.length} shared expense entries in this group',
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    color: Colors.grey.shade500,
-                                  ),
-                                ),
-                              ],
                             ],
                           ),
                         ),
                       );
                     }),
+                  ],
                   const SizedBox(height: 60),
                 ],
               );
             },
             loading: () => const Center(child: CircularProgressIndicator()),
-            error: (e, _) => Center(child: Text('Direct Error: $e')),
+            error: (e, _) => Center(child: Text('Error: $e')),
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Group Error: $e')),
+        error: (e, _) => Center(child: Text('Error: $e')),
       ),
     );
   }

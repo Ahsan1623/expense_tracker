@@ -8,7 +8,8 @@ class GroupModel {
   final String createdById;
   final List<String> members;
   final Map<String, String> memberRoles; // userId -> 'ADMIN' | 'MEMBER'
-  final Map<String, double> netBalances; // userId -> net balance (+ve owes money, -ve in debt)
+  final Map<String, String> tempMembers; // tempId -> displayName (Guest/Without app)
+  final Map<String, double> netBalances; // userId -> net balance
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -20,10 +21,14 @@ class GroupModel {
     required this.createdById,
     required this.members,
     required this.memberRoles,
+    this.tempMembers = const {},
     this.netBalances = const {},
     required this.createdAt,
     required this.updatedAt,
   });
+
+  // Saare real + temp members ki combined IDs
+  List<String> get allMemberIds => [...members, ...tempMembers.keys];
 
   factory GroupModel.fromMap(Map<String, dynamic> map, String id) {
     return GroupModel(
@@ -34,6 +39,7 @@ class GroupModel {
       createdById: map['createdById'] ?? '',
       members: List<String>.from(map['members'] ?? []),
       memberRoles: Map<String, String>.from(map['memberRoles'] ?? {}),
+      tempMembers: Map<String, String>.from(map['tempMembers'] ?? {}),
       netBalances: (map['netBalances'] as Map<String, dynamic>?)?.map(
             (k, v) => MapEntry(k, (v as num).toDouble()),
           ) ??
@@ -51,6 +57,7 @@ class GroupModel {
       'createdById': createdById,
       'members': members,
       'memberRoles': memberRoles,
+      'tempMembers': tempMembers,
       'netBalances': netBalances,
       'createdAt': Timestamp.fromDate(createdAt),
       'updatedAt': Timestamp.fromDate(updatedAt),

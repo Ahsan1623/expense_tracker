@@ -12,6 +12,9 @@ class DirectExpenseModel {
   final double owedAmount;
   final DirectSplitType splitType;
   final bool isSettlement;
+  final String settlementStatus; // 'PENDING', 'CONFIRMED', 'REJECTED'
+  final String paymentMode;
+  final bool isArchived; // <-- Clear settle ke liye
   final DateTime createdAt;
 
   DirectExpenseModel({
@@ -22,7 +25,10 @@ class DirectExpenseModel {
     required this.totalAmount,
     required this.owedAmount,
     required this.splitType,
-    this.isSettlement = false,
+    required this.isSettlement,
+    this.settlementStatus = 'CONFIRMED',
+    this.paymentMode = 'Cash',
+    this.isArchived = false,
     required this.createdAt,
   });
 
@@ -34,11 +40,13 @@ class DirectExpenseModel {
       title: map['title'] ?? '',
       totalAmount: (map['totalAmount'] as num?)?.toDouble() ?? 0.0,
       owedAmount: (map['owedAmount'] as num?)?.toDouble() ?? 0.0,
-      splitType: DirectSplitType.values.firstWhere(
-        (e) => e.name == map['splitType'],
-        orElse: () => DirectSplitType.equal50_50,
-      ),
+      splitType: map['splitType'] == 'equal50_50'
+          ? DirectSplitType.equal50_50
+          : DirectSplitType.fullAmount,
       isSettlement: map['isSettlement'] ?? false,
+      settlementStatus: map['settlementStatus'] ?? 'CONFIRMED',
+      paymentMode: map['paymentMode'] ?? 'Cash',
+      isArchived: map['isArchived'] ?? false,
       createdAt: (map['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
     );
   }
@@ -52,6 +60,9 @@ class DirectExpenseModel {
       'owedAmount': owedAmount,
       'splitType': splitType.name,
       'isSettlement': isSettlement,
+      'settlementStatus': settlementStatus,
+      'paymentMode': paymentMode,
+      'isArchived': isArchived,
       'createdAt': Timestamp.fromDate(createdAt),
     };
   }
